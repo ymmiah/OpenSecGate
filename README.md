@@ -2,7 +2,7 @@
 
 **Design and Evaluation of an Open-Source Security Gate for CI/CD Pipelines Using Context-Aware Vulnerability Prioritisation**
 
-> **Status:** Final-year BSc Computing project — planning and initial development. This repository currently contains documentation only. The CLI, adapters, tests, policy engine and GitHub Action have **not yet been implemented**.
+> **Status:** Final-year BSc Computing project — planning and initial development. Initial development phase. The CLI, adapters, tests, policy engine and GitHub Action are planned but not yet implemented.
 
 ## Project aim
 
@@ -33,8 +33,6 @@ Risk evaluation --> PASS / WARN / BLOCK
     v
 CLI report and GitHub Action result
 ```
-
-**Academic ownership:** The student will implement and evaluate the code. External feedback is used for explanation, design review, debugging questions and small illustrative examples, not complete assessed modules.
 
 ## 1. Requirements and dependencies
 
@@ -98,9 +96,9 @@ When the student has written `pyproject.toml` and declared development extras, s
 
 **Goal:** Accept a saved Semgrep **SARIF 2.1.0 JSON** report and produce a collection of normalised findings. Do not add scoring or invoke external scanners in this milestone.
 
-### Understand the input before coding
+### SARIF input structure
 
-Inspect a genuine Semgrep report. Relevant SARIF fields include:
+The adapter will accept Semgrep SARIF 2.1.0 data. Relevant SARIF fields include:
 
 | SARIF location | Information to consider |
 | --- | --- |
@@ -117,9 +115,9 @@ Inspect a genuine Semgrep report. Relevant SARIF fields include:
 
 SARIF is a general interchange standard, **not** an OpenSecGate severity or risk-scoring policy. The mapping from SARIF levels and optional rule metadata to your internal severity categories must be explicitly designed and tested. Do not assume that optional SARIF fields always exist, or that the first run and first location are the only ones.
 
-### Design the common finding contract first
+### Common finding contract
 
-Before writing a parser, decide the types and required/optional status of at least:
+The shared schema will define field types and required or optional status for:
 
 - `scanner` and `rule_id`
 - `message` and `severity`
@@ -127,9 +125,9 @@ Before writing a parser, decide the types and required/optional status of at lea
 - `fingerprint` or another stable finding identifier
 - `metadata` for source-specific details that must not be silently discarded
 
-A possible *interface to discuss*, **not a completed implementation**, is `parse_semgrep_sarif(document) -> list[Finding]`. Decide separately where JSON loading, validation and conversion belong. Preserve useful evidence rather than manufacturing missing values.
+Proposed adapter interface: `parse_semgrep_sarif(document) -> list[Finding]`. JSON loading, structure validation and result conversion should have clear responsibilities. Missing source details should remain explicitly unavailable rather than being fabricated.
 
-### Suggested repository layout — not yet created
+### Planned repository layout
 
 ```text
 OpenSecGate/
@@ -152,9 +150,9 @@ OpenSecGate/
 └── action.yml                      # later: GitHub Action metadata
 ```
 
-Use this as a structure proposal, not as evidence of completed code.
+This is the intended structure; implementation files have not yet been created.
 
-### Write tests for the behaviour you intend
+### Test requirements
 
 1. Valid SARIF containing one result produces one normalised finding.
 2. A valid report with an empty `results` array produces no findings.
@@ -164,39 +162,28 @@ Use this as a structure proposal, not as evidence of completed code.
 6. Severity mapping and any rule metadata lookups behave consistently.
 7. Invalid input **never silently becomes a clean PASS**.
 
-Use `pytest` to drive your own implementation. Once tests exist, the intended checks are:
+The planned development checks are:
 
 ```bash
 python -m pytest -q
 python -m ruff check .
 ```
 
-These checks **cannot yet pass as an implementation verification**: no tests or Python source files exist in the repository.
+These checks will verify the implementation after the source and tests have been added.
 
-## 4. First tasks, in order
+## 4. Initial development tasks
 
 - [ ] **Task 1 — Environment:** Clone the repository, create the Python 3.11 virtual environment, and install `pytest` and `ruff`.
-- [ ] **Task 2 — Project configuration:** Write `.gitignore` and `pyproject.toml` yourself. Specify Python 3.11, a `src/` package layout, a build backend and development dependencies.
+- [ ] **Task 2 — Project configuration:** Create `.gitignore` and `pyproject.toml`. Specify Python 3.11, a `src/` package layout, a build backend and development dependencies.
 - [ ] **Task 3 — SARIF evidence:** Obtain a genuine Semgrep SARIF 2.1.0 sample and inspect its `runs`, `results` and location objects. Remove secrets and personal paths before committing the fixture.
 - [ ] **Task 4 — Finding design:** Record which common fields are mandatory, which are optional and why.
 - [ ] **Task 5 — Test-first adapter:** Write the first one-finding test, then implement only enough SARIF reading and mapping to make it pass.
 - [ ] **Task 6 — Edge cases:** Add empty, multi-result, missing-field and malformed-input tests. Make error handling explicit.
 - [ ] **Task 7 — Review:** Run tests and linting, review data loss and error behaviour, and document results before moving to the second scanner.
 
-**Definition of done for Milestone 1:** Student-authored code can read real Semgrep SARIF, produce documented common findings, reject invalid input clearly, and pass repeatable tests. No weighted risk policy or PASS/WARN/BLOCK engine is claimed yet.
+**Milestone 1 acceptance criteria:** The adapter reads real Semgrep SARIF, produces documented common findings, rejects invalid input clearly, and passes repeatable tests. No weighted risk policy or PASS/WARN/BLOCK engine is claimed yet.
 
-## 5. Tutor/code-review questions
-
-Before implementing the adapter, be able to explain:
-
-1. Why does `runs[0]["results"]` risk dropping findings?
-2. What should happen when `artifactLocation` or `startLine` is missing?
-3. Is SARIF `level: "error"` equivalent to an OpenSecGate `critical` finding? Why or why not?
-4. Which missing fields make a report invalid, and which make only an individual field unavailable?
-5. What is the difference between **zero findings** and **a scanner report that failed to load**?
-6. How will you prove the adapter is correct without depending on a live Semgrep scan in every unit test?
-
-## 6. Later milestones (not yet implemented)
+## 5. Later milestones (not yet implemented)
 
 - **Milestone 2:** Add and test OSV-Scanner, Gitleaks and zizmor adapters against the same finding contract.
 - **Milestone 3:** Define, document and measure the six context signals; distinguish observed evidence from unavailable context.
@@ -217,4 +204,4 @@ The GitHub Action must use least-privilege permissions and must not report PASS 
 
 ---
 
-**Implementation status:** README and development plan only. All milestones remain pending until code and tests are committed and verified.
+**Implementation status:** Planning and documentation. Development milestones will be updated as code and tests are committed and verified.
