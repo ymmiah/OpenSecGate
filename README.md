@@ -10,6 +10,10 @@ The aim is **not to create another vulnerability scanner**. OpenSecGate will use
 
 > **Project status:** The Python project structure and development-tool configuration are in place. The common finding schema, scanner adapters, decision engine, command-line interface and GitHub Action are not yet implemented.
 
+## Development logbook
+
+Development progress, decisions, testing evidence and next steps are recorded in the [OpenSecGate Development Logbook](docs/LOGBOOK.md). Each entry is dated and distinguishes completed work from planned work.
+
 ## How OpenSecGate will work
 
 The design has two main layers:
