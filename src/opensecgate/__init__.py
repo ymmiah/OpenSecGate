@@ -1,0 +1,1 @@
+"""OpenSecGate package."""
