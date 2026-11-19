@@ -8,7 +8,7 @@ Most CI/CD security checks depend heavily on the severity reported by a scanner.
 
 The aim is **not to create another vulnerability scanner**. OpenSecGate will use four open-source tools, normalise their findings and apply a policy that considers both severity and the context in which the problem was found.
 
-> **Project status:** Development is at the initial setup and design stage. The scanner adapters, decision engine, command-line interface and GitHub Action are planned and have not yet been implemented.
+> **Project status:** The Python project structure and development-tool configuration are in place. The common finding schema, scanner adapters, decision engine, command-line interface and GitHub Action are not yet implemented.
 
 ## How OpenSecGate will work
 
@@ -107,7 +107,7 @@ cd OpenSecGate
 python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install pytest ruff
+python -m pip install -e ".[dev]"
 python --version
 ```
 
@@ -119,11 +119,11 @@ cd OpenSecGate
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install pytest ruff
+python -m pip install -e ".[dev]"
 python --version
 ```
 
-The Python version should be **3.11.x**. The virtual environment (`.venv/`) will be excluded from version control when the project configuration files are added.
+The Python version should be **3.11.x**. The virtual environment (`.venv/`) is excluded from version control by `.gitignore`.
 
 ## First development stage: Semgrep SARIF adapter
 
@@ -179,7 +179,7 @@ OpenSecGate/
 └── action.yml
 ```
 
-This is the proposed structure, not a list of files already present in the repository. Files will be added as their related features are developed.
+The project configuration, source package and test directory have been created. The finding model, adapter modules, policy and GitHub Action will be added in later tasks.
 
 ## Development roadmap
 
@@ -228,4 +228,4 @@ Scanner tools and their output formats may change. Their versions and test repor
 
 ---
 
-**Current status:** Project design and development setup. The next implementation milestone is the common finding schema and the Semgrep SARIF adapter.
+**Current status:** Stage 1 — Python project structure prepared. The common finding schema and its tests are next, followed by the Semgrep SARIF adapter in Stage 2.
