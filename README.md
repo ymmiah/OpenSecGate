@@ -2,69 +2,104 @@
 
 **Design and Evaluation of an Open-Source Security Gate for CI/CD Pipelines Using Context-Aware Vulnerability Prioritisation**
 
-> **Status:** Final-year BSc Computing project — planning and initial development. Initial development phase. The CLI, adapters, tests, policy engine and GitHub Action are planned but not yet implemented.
+OpenSecGate is a planned Python 3.11 command-line tool and GitHub Action. It brings together findings from existing security scanners, adds project context and decides whether a CI/CD pipeline should continue or stop.
 
-## Project aim
+Most CI/CD security checks depend heavily on the severity reported by a scanner. This can be a problem because a high severity score does not always mean that a vulnerability can affect the project. At the same time, a lower-rated finding may still be dangerous when it involves an exposed secret or an unsafe workflow. OpenSecGate is designed to make these decisions more useful and easier to explain.
 
-OpenSecGate is a planned **Python 3.11 command-line tool and GitHub Action** that will combine security findings from **Semgrep**, **OSV-Scanner**, **Gitleaks** and **zizmor**, normalise them into a common finding schema, assess six contextual risk signals, and apply configurable weights from `policy.yml` to produce a **PASS**, **WARN** or **BLOCK** decision.
+The aim is **not to create another vulnerability scanner**. OpenSecGate will use four open-source tools, normalise their findings and apply a policy that considers both severity and the context in which the problem was found.
 
-The intended processing flow is:
+> **Project status:** Development is at the initial setup and design stage. The scanner adapters, decision engine, command-line interface and GitHub Action are planned and have not yet been implemented.
+
+## How OpenSecGate will work
+
+The design has two main layers:
+
+1. **Evidence layer.** Existing scanners check source code, dependencies, exposed secrets and GitHub Actions workflows.
+2. **Decision layer.** OpenSecGate converts their output into one finding format, adds six context signals and uses the weights and thresholds in `policy.yml` to decide what should happen to the build.
 
 ```text
-Scanner output files
-    |
-    +-- Semgrep (SARIF)           <-- FIRST DEVELOPMENT MILESTONE
-    +-- OSV-Scanner
-    +-- Gitleaks
-    +-- zizmor
-    |
-    v
-Format-specific adapters
-    |
-    v
-Common finding schema
-    |
-    v
-Six context signals + weighted policy.yml
-    |
-    v
-Risk evaluation --> PASS / WARN / BLOCK
-    |
-    v
-CLI report and GitHub Action result
+Push or pull request
+        |
+        v
+GitHub Actions workflow
+        |
+        +---- Semgrep --------- Insecure code patterns
+        +---- OSV-Scanner ----- Vulnerable dependencies
+        +---- Gitleaks -------- Exposed secrets
+        +---- zizmor ---------- Workflow misconfigurations
+        |
+        v
+Normalise findings into one schema
+        |
+        v
+Add six context signals
+        |
+        v
+Evaluate using policy.yml
+        |
+        +---- PASS  -> Continue
+        +---- WARN  -> Continue with a warning
+        +---- BLOCK -> Stop the pipeline
+        |
+        v
+Written reasons and reports
 ```
 
-## 1. Requirements and dependencies
+The planned outputs are a written reason for each decision, a pull-request summary, an HTML report and SARIF findings for GitHub's Security tab. These are development targets, not features available in the current repository.
 
-### Required now
+## Six context signals
 
-| Component | Why it is needed | Installation |
-| --- | --- | --- |
-| Python **3.11** | Runtime for the CLI and adapters | Install Python 3.11 from [python.org](https://www.python.org/downloads/) |
-| Git | Version control | [git-scm.com](https://git-scm.com/downloads) |
-| `venv` and `pip` | Isolated Python environment and package installation | Included with typical Python 3.11 installations |
-| `pytest` | Test SARIF parsing, mapping and error handling | `python -m pip install pytest` |
-| `ruff` | Lint and format checks | `python -m pip install ruff` |
+OpenSecGate will consider the following signals where they are relevant to a finding.
 
-**The first Semgrep SARIF reader needs no third-party runtime parsing library:** Python's standard `json`, `pathlib`, `dataclasses` and `typing` modules are sufficient for an initial implementation.
-
-### Add only when those features are built
-
-| Dependency/tool | Planned use |
+| Context signal | What it checks |
 | --- | --- |
-| `PyYAML` | Read `policy.yml` later; use `yaml.safe_load`, not unsafe object deserialisation |
-| `setuptools` (build backend) | Package the project through a future `pyproject.toml` |
-| `build` | Optional wheel/source distribution build check |
-| Semgrep CLI | Generate genuine SARIF fixtures for integration testing; **not** required to parse an existing SARIF file |
-| OSV-Scanner, Gitleaks, zizmor | Add as separate external scanner tools during their later integration stages |
+| Direct or transitive | Is a dependency declared by the project, or brought in by another package? |
+| Production or development | Is the dependency used in the released application or only for development and testing? |
+| Imported in code | Does the source code import the affected package? |
+| Known exploitation | Is the vulnerability in CISA's Known Exploited Vulnerabilities (KEV) catalogue, and what does EPSS indicate? |
+| Secret location | Is a detected secret in live code or in a test fixture? |
+| Workflow privilege | Does a workflow use write permissions, risky triggers or unpinned actions? |
 
-Avoid installing unnecessary SDKs, web frameworks, database drivers or a full SARIF object-model package before there is a demonstrated need. Document and pin compatible dependency versions when packaging is introduced.
+These signals provide practical approximations to some of the questions raised by full reachability and exploitability analysis. They are not a replacement for full reachability analysis.
 
-## 2. Set up your development environment
+### Decisions and safety rule
 
-This repository has **no `pyproject.toml` or installable package yet**. The following commands prepare your local environment; they do not install an OpenSecGate CLI that has not been written.
+The policy file will contain the weights and thresholds used to return **PASS**, **WARN** or **BLOCK**, along with an explanation.
 
-**Linux / macOS:**
+A fixed safety rule will take priority over the weighted score: **a KEV-listed vulnerability or a live secret must result in BLOCK**. A failed scanner, unreadable report or failed policy evaluation must not be treated as a clean PASS.
+
+## Project scope
+
+The initial version will support:
+
+- JavaScript projects using npm and Python projects using PyPI.
+- GitHub Actions as the CI/CD platform.
+- Findings from Semgrep, OSV-Scanner, Gitleaks and zizmor.
+- Rule-based decisions using a configuration file.
+
+The project will not develop new vulnerability detection methods, provide a web interface, use machine learning or large language models, perform full reachability analysis, support other CI platforms or automatically fix vulnerabilities.
+
+## Development requirements
+
+### Tools needed for the first stage
+
+| Tool | Purpose |
+| --- | --- |
+| Python 3.11 | Main programming language and runtime |
+| Git | Version control |
+| `venv` and `pip` | Python environment and package management |
+| `pytest` | Tests for adapters, validation and decision logic |
+| `ruff` | Python linting and formatting |
+
+Python's built-in `json`, `pathlib`, `dataclasses` and `typing` modules are sufficient for the first SARIF-reading stage. **No third-party runtime dependency is required just to read a SARIF JSON file.**
+
+Further dependencies will be added when needed. For example, `PyYAML` is a candidate for reading `policy.yml` safely, and a packaging backend will be declared when `pyproject.toml` is created. Semgrep, OSV-Scanner, Gitleaks and zizmor will be installed or invoked separately as their integrations are developed.
+
+### Local setup
+
+Python 3.11 and Git must be installed first. The following commands create a development environment; they do not install a finished OpenSecGate application.
+
+**Linux and macOS**
 
 ```bash
 git clone https://github.com/ymmiah/OpenSecGate.git
@@ -76,7 +111,7 @@ python -m pip install pytest ruff
 python --version
 ```
 
-**Windows PowerShell:**
+**Windows PowerShell**
 
 ```powershell
 git clone https://github.com/ymmiah/OpenSecGate.git
@@ -88,120 +123,109 @@ python -m pip install pytest ruff
 python --version
 ```
 
-The final version check should report Python **3.11.x**. Do not commit the `.venv/` directory. Add it to `.gitignore` when creating the initial project files.
+The Python version should be **3.11.x**. The virtual environment (`.venv/`) will be excluded from version control when the project configuration files are added.
 
-When the student has written `pyproject.toml` and declared development extras, switch from manual tool installation to an editable development install such as `python -m pip install -e ".[dev]"`.
+## First development stage: Semgrep SARIF adapter
 
-## 3. First development milestone: Semgrep SARIF adapter
+The first task is to read a saved **Semgrep SARIF 2.1.0** report and convert its results into OpenSecGate's common finding format. Starting with stored scanner output will make it possible to test the adapter without running a new scan for every test.
 
-**Goal:** Accept a saved Semgrep **SARIF 2.1.0 JSON** report and produce a collection of normalised findings. Do not add scoring or invoke external scanners in this milestone.
+SARIF is a JSON-based format. The fields needed at this stage include `version`, `runs`, `results`, `ruleId`, `message`, `level` and any available file locations or rule metadata. Some details are optional, so missing locations and other optional fields must be handled without inventing information.
 
-### SARIF input structure
+The common finding format is planned to include the scanner name, rule identifier, message, severity, file path, line number, stable identifier and relevant scanner metadata. Its final field types will be defined alongside the first tests.
 
-The adapter will accept Semgrep SARIF 2.1.0 data. Relevant SARIF fields include:
+### Initial test cases
 
-| SARIF location | Information to consider |
-| --- | --- |
-| `version` | SARIF format version; initially target `2.1.0` |
-| `runs[]` | One or more analysis runs |
-| `runs[].results[]` | Reported findings |
-| `result.ruleId` | Source scanner rule identifier |
-| `result.message.text` | Human-readable explanation, when provided |
-| `result.level` | SARIF level: `error`, `warning`, `note` or `none` (not automatically a CVSS score) |
-| `result.locations[].physicalLocation.artifactLocation.uri` | Reported file URI, when available |
-| `result.locations[].physicalLocation.region.startLine` | Source line number, when available |
-| `result.partialFingerprints` | Optional finding identity data |
-| `runs[].tool.driver.rules[]` | Rule metadata that may be needed to enrich findings |
+The adapter will be checked against:
 
-SARIF is a general interchange standard, **not** an OpenSecGate severity or risk-scoring policy. The mapping from SARIF levels and optional rule metadata to your internal severity categories must be explicitly designed and tested. Do not assume that optional SARIF fields always exist, or that the first run and first location are the only ones.
+- A valid SARIF report with one finding.
+- A valid report with no findings.
+- Several findings across more than one run.
+- Missing optional fields, such as a file location or line number.
+- Invalid JSON, unsupported SARIF versions and malformed required data.
+- Consistent mapping of scanner levels and rule metadata.
 
-### Common finding contract
+A valid report with no findings is different from a report that failed to load. The latter must return an error and must not be presented as a successful scan.
 
-The shared schema will define field types and required or optional status for:
-
-- `scanner` and `rule_id`
-- `message` and `severity`
-- `file_path` and `start_line` (where available)
-- `fingerprint` or another stable finding identifier
-- `metadata` for source-specific details that must not be silently discarded
-
-Proposed adapter interface: `parse_semgrep_sarif(document) -> list[Finding]`. JSON loading, structure validation and result conversion should have clear responsibilities. Missing source details should remain explicitly unavailable rather than being fabricated.
-
-### Planned repository layout
-
-```text
-OpenSecGate/
-├── README.md
-├── .gitignore                      # to create
-├── pyproject.toml                  # to create
-├── policy.yml                      # later
-├── src/
-│   └── opensecgate/
-│       ├── __init__.py
-│       ├── models.py               # common Finding contract
-│       └── adapters/
-│           ├── __init__.py
-│           └── semgrep.py          # first adapter
-├── tests/
-│   ├── fixtures/
-│   │   └── semgrep/
-│   │       └── sample.sarif        # genuine, sanitised SARIF fixture
-│   └── test_semgrep_adapter.py
-└── action.yml                      # later: GitHub Action metadata
-```
-
-This is the intended structure; implementation files have not yet been created.
-
-### Test requirements
-
-1. Valid SARIF containing one result produces one normalised finding.
-2. A valid report with an empty `results` array produces no findings.
-3. Multiple runs and multiple findings are processed without loss.
-4. Missing optional location, line number or fingerprint data is handled deliberately.
-5. An invalid JSON document, unsupported SARIF version or malformed required structure generates a clear error.
-6. Severity mapping and any rule metadata lookups behave consistently.
-7. Invalid input **never silently becomes a clean PASS**.
-
-The planned development checks are:
+After the source and test files have been created, the planned local checks are:
 
 ```bash
 python -m pytest -q
 python -m ruff check .
 ```
 
-These checks will verify the implementation after the source and tests have been added.
+No test results are claimed at this stage, as the implementation and test suite are still to be written.
 
-## 4. Initial development tasks
+### Planned project layout
 
-- [ ] **Task 1 — Environment:** Clone the repository, create the Python 3.11 virtual environment, and install `pytest` and `ruff`.
-- [ ] **Task 2 — Project configuration:** Create `.gitignore` and `pyproject.toml`. Specify Python 3.11, a `src/` package layout, a build backend and development dependencies.
-- [ ] **Task 3 — SARIF evidence:** Obtain a genuine Semgrep SARIF 2.1.0 sample and inspect its `runs`, `results` and location objects. Remove secrets and personal paths before committing the fixture.
-- [ ] **Task 4 — Finding design:** Record which common fields are mandatory, which are optional and why.
-- [ ] **Task 5 — Test-first adapter:** Write the first one-finding test, then implement only enough SARIF reading and mapping to make it pass.
-- [ ] **Task 6 — Edge cases:** Add empty, multi-result, missing-field and malformed-input tests. Make error handling explicit.
-- [ ] **Task 7 — Review:** Run tests and linting, review data loss and error behaviour, and document results before moving to the second scanner.
+```text
+OpenSecGate/
+├── README.md
+├── .gitignore
+├── pyproject.toml
+├── policy.yml
+├── src/
+│   └── opensecgate/
+│       ├── __init__.py
+│       ├── models.py
+│       └── adapters/
+│           ├── __init__.py
+│           ├── semgrep.py
+│           ├── osv.py
+│           ├── gitleaks.py
+│           └── zizmor.py
+├── tests/
+│   ├── fixtures/
+│   └── test_semgrep_adapter.py
+└── action.yml
+```
 
-**Milestone 1 acceptance criteria:** The adapter reads real Semgrep SARIF, produces documented common findings, rejects invalid input clearly, and passes repeatable tests. No weighted risk policy or PASS/WARN/BLOCK engine is claimed yet.
+This is the proposed structure, not a list of files already present in the repository. Files will be added as their related features are developed.
 
-## 5. Later milestones (not yet implemented)
+## Development roadmap
 
-- **Milestone 2:** Add and test OSV-Scanner, Gitleaks and zizmor adapters against the same finding contract.
-- **Milestone 3:** Define, document and measure the six context signals; distinguish observed evidence from unavailable context.
-- **Milestone 4:** Implement and validate the weighted `policy.yml` decision logic, including PASS/WARN/BLOCK thresholds and reproducibility.
-- **Milestone 5:** Add the CLI and GitHub Action wrapper; document exit codes, permissions, reports and scanner-failure handling.
-- **Milestone 6:** Evaluate the approach with repeatable test cases, comparisons against baseline severity-only prioritisation, limitations and a defensible academic methodology.
+| Stage | Work | Expected result |
+| --- | --- | --- |
+| 1. Setup and common format | Configure Python 3.11, project packaging and tests; define the normalised finding schema | A consistent basis for the four adapters |
+| 2. Scanner integration | Start with Semgrep SARIF, then add OSV-Scanner, Gitleaks and zizmor | One list of findings from all four scanners |
+| 3. Context enrichment | Add the six context signals | Findings contain relevant project context |
+| 4. Decision engine | Read `policy.yml`, apply weights, thresholds and the fixed safety rule | Explainable PASS, WARN or BLOCK decisions |
+| 5. GitHub Action | Add the CLI entry point, workflow integration and reporting | Version 1.0 usable in GitHub Actions |
+| 6. Evaluation | Compare decisions with a severity-only gate | Evidence of strengths, limitations and pipeline overhead |
 
-The GitHub Action must use least-privilege permissions and must not report PASS when a required scan or policy evaluation has failed.
+The interim project schedule sets **12 February 2027** as the planned code-freeze date, with evaluation to follow. The timetable may be revised if development or testing shows that a task needs more work.
 
-## References
+## Evaluation plan
 
-- [OASIS SARIF 2.1.0 specification](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
-- [Semgrep documentation — local and CLI scans](https://semgrep.dev/docs/category/local-and-cli-scans)
-- [Python Packaging User Guide — writing pyproject.toml](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/)
-- [pytest — good integration practices](https://docs.pytest.org/en/stable/explanation/goodpractices.html)
-- [Ruff documentation](https://docs.astral.sh/ruff/)
+OpenSecGate will be compared with a severity-only gate using **60 labelled test cases** across the four scanners. These will include **10 context traps** where context might appear to lower the risk even though the correct decision remains BLOCK.
+
+Both gates will be tested on the same stored scanner findings, so the decision logic is the main difference. The evaluation will measure:
+
+- Precision, recall and F1-score.
+- The rate at which high-risk cases are missed.
+- How decisions change when signal weights are adjusted by ±50%.
+- What happens when one context signal is removed at a time.
+- Additional pipeline time, measured across 5 to 10 public repositories.
+
+The benchmark labels will be established before the gates are evaluated. A sample will also be independently labelled so agreement can be measured using Cohen's kappa.
+
+The results may show that context-aware decisions improve prioritisation, but that is something the project must **test rather than assume**.
+
+## Security and handling of findings
+
+The project will use publicly available code and saved scanner reports for testing. It will not probe systems without permission. Test fixtures must not contain real secrets or unnecessary personal data.
+
+Scanner tools and their output formats may change. Their versions and test reports will therefore be recorded so results can be reproduced. GitHub Actions permissions will be kept to the minimum needed, with any SARIF upload permission granted only where required.
+
+## Technical references
+
+- [SARIF 2.1.0 specification — OASIS](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
+- [Semgrep — local and CLI scans](https://semgrep.dev/docs/category/local-and-cli-scans)
 - [GitHub Actions documentation](https://docs.github.com/en/actions)
+- [Uploading SARIF files to GitHub code scanning](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/integrate-with-existing-tools/upload-sarif-file)
+- [Python Packaging User Guide](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/)
+- [pytest documentation](https://docs.pytest.org/)
+- [Ruff documentation](https://docs.astral.sh/ruff/)
 
 ---
 
-**Implementation status:** Planning and documentation. Development milestones will be updated as code and tests are committed and verified.
+**Current status:** Project design and development setup. The next implementation milestone is the common finding schema and the Semgrep SARIF adapter.
